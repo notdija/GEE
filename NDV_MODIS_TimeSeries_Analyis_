@@ -1,0 +1,103 @@
+NDVI Time-Series Analysis Using Google Earth Engine (GEE)
+
+var roi = ee.FeatureCollection('projects/ee-deejashahid/assets/Punjab');
+
+var ndvi = ee.ImageCollection('MODIS/006/MOD13Q1')
+                    .filter(ee.Filter.date('2000-01-01', '2020-12-31')).select('NDVI');
+
+// Scale NDVI values and copy system properties
+var ndviscale = ndvi.map(function(img) {
+  return img.multiply(0.0001).copyProperties(img, ['system:time_start', 'system:time_end']);
+});
+
+// Clip NDVI images to ROI
+var ndviscale_clipped = ndviscale.map(function(img) {
+  return img.clip(roi);
+});
+
+// Create time series chart with NDVI values
+var chart = ui.Chart.image.seriesByRegion({
+  imageCollection: ndviscale_clipped,
+  regions: roi,
+  reducer: ee.Reducer.mean(),
+  band: 'NDVI',
+  scale: 250,
+  xProperty: 'system:time_start',
+  seriesProperty: 'adm3_name',
+});
+
+chart.setOptions({
+  title: 'NDVI Long Term Time Series',
+  vAxis: {title: 'NDVI', maxValue: 1, minValue: 0},
+  hAxis: {title: 'Date', format: 'yyyy', gridlines: {count: 12}},
+  series: {
+    0: {color: 'green'}  // Line color set to green
+  },
+  legend: {position: 'bottom'}
+});
+
+print(chart);
+
+// Generate NDVI maps for specific years and export them
+var years = [2000, 2005, 2010, 2015, 2020];
+years.forEach(function(year) {
+  var image = ndviscale_clipped
+                .filter(ee.Filter.calendarRange(year, year, 'year'))
+                .mean()
+                .clip(roi);
+                
+  var visParams = {
+    min: 0,
+    max: 0.9,
+    palette: ['yellow', 'green', 'red']
+  };
+  
+  // Add the NDVI image to the map for visualization
+  Map.addLayer(image, visParams, 'NDVI ' + year);
+
+  // Export each image to Google Drive
+  Export.image.toDrive({
+    image: image,
+    description: 'NDVI_' + year,
+    folder: 'NDVI_Maps',
+    fileNamePrefix: 'NDVI_' + year,
+    region: roi,
+    scale: 250,
+    maxPixels: 1e8
+  });
+});
+
+// Add Title on Top of the Map
+var title = ui.Label({
+  value: 'NDVI Time Series Analysis using MODIS Data',
+  style: {
+    position: 'top-center',
+    fontSize: '20px',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    backgroundColor: 'white',
+    padding: '8px',
+    border: '1px solid black'
+  }
+});
+
+var encryptedWatermark = '© Khadija Shahid, 2025';
+
+
+var watermark = ui.Label({
+  value: encryptedWatermark,
+  style: {
+    position: 'bottom-right',
+    fontSize: '12px',
+    color: 'gray',
+    backgroundColor: 'white',
+    padding: '4px',
+    fontWeight: 'bold'
+  }
+});
+
+
+
+// Add Elements to the Map
+Map.add(title);
+Map.add(watermark);
